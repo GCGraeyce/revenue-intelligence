@@ -1,0 +1,279 @@
+import { useState } from 'react';
+import { Deal } from '@/data/demo-data';
+import { useCRM } from '@/contexts/CRMContext';
+import { sanitizeHTML } from '@/lib/sanitize';
+import {
+  getDealPromptSuggestions,
+  getAvailablePrompts,
+  executePrompt,
+  type PromptOutput,
+  type OutputAction,
+} from '@/lib/prompt-executor';
+import {
+  Sparkles, Loader2, CheckCircle, FileText, Zap,
+  ChevronRight, ClipboardCopy, RefreshCw, Target,
+  ShieldAlert, Trophy, Briefcase,
+} from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Prompt card metadata
+// ---------------------------------------------------------------------------
+
+const PROMPT_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+  'assess-meddic-completeness': { icon: Target, color: 'text-blue-400', label: 'MEDDIC Assessment' },
+  'flag-high-risk-deals': { icon: ShieldAlert, color: 'text-red-400', label: 'Risk Assessment' },
+  'create-win-strategy-plan': { icon: Trophy, color: 'text-green-400', label: 'Win Strategy' },
+  'prepare-executive-summary-deal': { icon: Briefcase, color: 'text-purple-400', label: 'Executive Summary' },
+};
+
+// ---------------------------------------------------------------------------
+// Markdown renderer (reuse same approach as AICopilot)
+// ---------------------------------------------------------------------------
+
+function renderMarkdown(text: string): string {
+  const html = text
+    .replace(/\|(.+)\|/g, (match) => {
+      if (match.includes('---')) return '';
+      const cells = match.split('|').filter(Boolean).map(c => c.trim());
+      return `<tr>${cells.map(c => `<td style="padding:4px 10px;border-bottom:1px solid rgba(255,255,255,0.06)">${c}</td>`).join('')}</tr>`;
+    })
+    .replace(/(<tr>.*<\/tr>\s*)+/g, (match) => `<table class="w-full text-xs font-mono border border-border/30 rounded mb-3">${match}</table>`)
+    .replace(/### (.+?)(\n|$)/g, '<h3 class="text-sm font-semibold text-foreground mt-4 mb-2">$1</h3>')
+    .replace(/## (.+?)(\n|$)/g, '<h2 class="text-base font-bold text-foreground mt-3 mb-2">$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground">$1</strong>')
+    .replace(/\n/g, '<br/>')
+    .replace(/[✅❌⚠️🎯🔄🧵]/g, (m) => `<span class="not-prose">${m}</span>`);
+  return sanitizeHTML(html);
+}
+
+// ---------------------------------------------------------------------------
+// Action Button
+// ---------------------------------------------------------------------------
+
+function ActionButton({ action, onExecute }: { action: OutputAction & { executed?: boolean }; onExecute: () => void }) {
+  return (
+    <button
+      onClick={onExecute}
+      disabled={action.executed}
+      className={`flex items-center gap-1.5 text-[10px] font-mono px-3 py-2 rounded-lg border transition-colors ${
+        action.executed
+          ? 'bg-green-500/10 border-green-500/30 text-green-400 cursor-default'
+          : 'bg-primary/5 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer'
+      }`}
+    >
+      {action.executed ? (
+        <CheckCircle className="w-3 h-3" />
+      ) : action.type === 'crm-note' ? (
+        <FileText className="w-3 h-3" />
+      ) : action.type === 'crm-task' ? (
+        <Zap className="w-3 h-3" />
+      ) : (
+        <ChevronRight className="w-3 h-3" />
+      )}
+      {action.label}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function DealAIAnalysis({ deal }: { deal: Deal }) {
+  const { pushNote, pushTask } = useCRM();
+  const [output, setOutput] = useState<PromptOutput | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [activePrompt, setActivePrompt] = useState<string | null>(null);
+  const [executedActions, setExecutedActions] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
+
+  const suggestions = getDealPromptSuggestions(deal);
+  const available = getAvailablePrompts(deal)
+    .filter(p => ['assess-meddic-completeness', 'flag-high-risk-deals', 'create-win-strategy-plan', 'prepare-executive-summary-deal'].includes(p.prompt.id));
+
+  async function runPrompt(promptId: string) {
+    setLoading(true);
+    setActivePrompt(promptId);
+    setExecutedActions(new Set());
+    setCopied(false);
+
+    const result = await executePrompt(promptId, deal);
+    setOutput(result);
+    setLoading(false);
+  }
+
+  async function handleAction(action: OutputAction) {
+    if (executedActions.has(action.id)) return;
+
+    if (action.type === 'crm-note' && action.dealId) {
+      await pushNote(action.dealId, `RevOS AI: ${output?.promptName || 'Analysis'}`, action.payload);
+    } else if (action.type === 'crm-task' && action.dealId) {
+      await pushTask(action.dealId, action.payload, `Generated by RevOS AI — ${output?.promptName || 'Analysis'}`);
+    }
+
+    setExecutedActions(prev => new Set(prev).add(action.id));
+  }
+
+  function handleCopy() {
+    if (!output) return;
+    navigator.clipboard.writeText(output.content.replace(/[#*|]/g, '').replace(/\n{3,}/g, '\n\n'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {/* Prompt Selector */}
+      <div className="space-y-2">
+        <div className="metric-label flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 text-primary" />
+          AI-Powered Deal Analysis
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Run prompt library analyses powered by your live deal data, MEDDIC framework, and Evercam sales playbook.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          {available.map(({ prompt, relevance }) => {
+            const meta = PROMPT_META[prompt.id] || { icon: Sparkles, color: 'text-primary', label: prompt.name };
+            const Icon = meta.icon;
+            const isActive = activePrompt === prompt.id;
+            const isSuggested = suggestions.includes(prompt.id);
+
+            return (
+              <button
+                key={prompt.id}
+                onClick={() => runPrompt(prompt.id)}
+                disabled={loading}
+                className={`relative flex items-start gap-2.5 p-3 rounded-lg border transition-all text-left ${
+                  isActive
+                    ? 'border-primary/50 bg-primary/5 shadow-sm'
+                    : 'border-border/30 hover:border-primary/30 hover:bg-muted/20'
+                } ${loading ? 'opacity-60 cursor-wait' : ''}`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  isActive ? 'bg-primary/15' : 'bg-secondary/50'
+                }`}>
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-primary' : meta.color}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-foreground leading-tight">{meta.label}</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                    {prompt.description}
+                  </div>
+                </div>
+                {isSuggested && (
+                  <span className="absolute top-1.5 right-1.5 text-[8px] font-mono px-1 py-0.5 rounded bg-primary/10 text-primary">
+                    Suggested
+                  </span>
+                )}
+                {relevance === 'high' && !isSuggested && (
+                  <span className="absolute top-1.5 right-1.5 text-[8px] font-mono px-1 py-0.5 rounded bg-grade-c/10 text-grade-c">
+                    Relevant
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-8 gap-3 animate-fade-in">
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          <div>
+            <div className="text-sm text-foreground font-medium">
+              Running {PROMPT_META[activePrompt || '']?.label || 'analysis'}...
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+              Analyzing deal data, personas, playbook stage requirements
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Output */}
+      {output && !loading && (
+        <div className="space-y-3 animate-fade-in">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono px-2 py-1 rounded bg-primary/10 text-primary">
+                {output.promptName}
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                {Math.round(output.confidence * 100)}% confidence
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/30 transition-colors"
+              >
+                {copied ? <CheckCircle className="w-3 h-3 text-green-400" /> : <ClipboardCopy className="w-3 h-3" />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+              <button
+                onClick={() => runPrompt(output.promptId)}
+                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/30 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Re-run
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="bg-secondary/30 rounded-xl p-4 border border-border/20">
+            <div
+              className="text-sm text-foreground/90 prose prose-sm prose-invert max-w-none
+                [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-2
+                [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1.5
+                [&_table]:text-[11px] [&_table]:font-mono [&_table]:w-full [&_table]:my-2
+                [&_td]:px-2 [&_td]:py-1
+                [&_strong]:text-foreground
+                [&_br]:leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(output.content) }}
+            />
+          </div>
+
+          {/* Data Sources */}
+          <div className="flex flex-wrap gap-1.5">
+            {output.dataSourcesUsed.map(src => (
+              <span key={src} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+                {src}
+              </span>
+            ))}
+          </div>
+
+          {/* Actions */}
+          {output.actions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                CRM Actions
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {output.actions.map(action => (
+                  <ActionButton
+                    key={action.id}
+                    action={{ ...action, executed: executedActions.has(action.id) }}
+                    onExecute={() => handleAction(action)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!output && !loading && (
+        <div className="text-center py-6 text-xs text-muted-foreground">
+          <Sparkles className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
+          Select an analysis above to generate AI insights for this deal
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --background: 225 25% 95%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 20%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+    /* Grade colors */
+    --grade-a: 152 69% 38%;
+    --grade-b: 173 58% 39%;
+    --grade-c: 38 92% 50%;
+    --grade-d: 25 95% 53%;
+    --grade-f: 0 72% 51%;
+    /* Signal colors */
+    --signal-win: 152 69% 38%;
+    --signal-loss: 0 72% 51%;
+    --signal-slip: 38 92% 50%;
+    --signal-nodecision: 215 16% 47%;
+    /* Chart */
+    --chart-1: 221 83% 53%;
+    --chart-2: 152 69% 38%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 0 72% 51%;
+    --chart-5: 262 83% 58%;
+    /* Glow effects */
+    --glow-primary: 0 0 24px hsl(221 83% 53% / 0.12), 0 0 4px hsl(221 83% 53% / 0.06);
+    --glow-success: 0 0 24px hsl(152 69% 38% / 0.12), 0 0 4px hsl(152 69% 38% / 0.06);
+    --glow-warning: 0 0 24px hsl(38 92% 50% / 0.12), 0 0 4px hsl(38 92% 50% / 0.06);
+    --glow-danger: 0 0 24px hsl(0 72% 51% / 0.12), 0 0 4px hsl(0 72% 51% / 0.06);
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 30%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 20% 92%;
+    --sidebar-ring: 221 83% 53%;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 92%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 92%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 92%;
+    --primary: 221 83% 60%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 222 47% 16%;
+    --secondary-foreground: 210 40% 78%;
+    --muted: 222 47% 16%;
+    --muted-foreground: 215 16% 58%;
+    --accent: 222 47% 16%;
+    --accent-foreground: 210 40% 92%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 20% 20%;
+    --input: 214 20% 20%;
+    --ring: 221 83% 60%;
+    --sidebar-background: 222 47% 9%;
+    --sidebar-foreground: 210 40% 78%;
+    --sidebar-primary: 221 83% 60%;
+    --sidebar-primary-foreground: 222 47% 8%;
+    --sidebar-accent: 222 47% 14%;
+    --sidebar-accent-foreground: 210 40% 92%;
+    --sidebar-border: 214 20% 18%;
+    --sidebar-ring: 221 83% 60%;
+  }
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+@layer components {
+  .glass-card {
+    @apply bg-card border border-border/60 rounded-xl shadow-sm;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .glass-card:hover {
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  }
+  .grade-badge {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-lg font-mono font-bold text-sm;
+  }
+  .grade-a { @apply bg-[hsl(var(--grade-a)/.12)] text-[hsl(var(--grade-a))]; }
+  .grade-b { @apply bg-[hsl(var(--grade-b)/.12)] text-[hsl(var(--grade-b))]; }
+  .grade-c { @apply bg-[hsl(var(--grade-c)/.12)] text-[hsl(var(--grade-c))]; }
+  .grade-d { @apply bg-[hsl(var(--grade-d)/.12)] text-[hsl(var(--grade-d))]; }
+  .grade-f { @apply bg-[hsl(var(--grade-f)/.12)] text-[hsl(var(--grade-f))]; }
+  .metric-value {
+    @apply font-mono text-3xl font-bold tracking-tight;
+  }
+  .metric-label {
+    @apply text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-semibold;
+  }
+  .data-cell {
+    @apply font-mono text-sm tabular-nums;
+  }
+  .glow-primary { box-shadow: var(--glow-primary); }
+  .glow-success { box-shadow: var(--glow-success); }
+  .glow-warning { box-shadow: var(--glow-warning); }
+  .glow-danger { box-shadow: var(--glow-danger); }
+  .pulse-dot {
+    @apply relative;
+  }
+  .pulse-dot::after {
+    content: '';
+    @apply absolute w-2 h-2 rounded-full animate-ping;
+  }
+}
